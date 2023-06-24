@@ -129,15 +129,6 @@ int main(int argc, char* argv[]) {
         JBuffer uvBuf = GetBuffer(model, mesh, "TEXCOORD_0");
         JBuffer indicesBuf = GetIndices(model, mesh);
 
-        if (
-            normalBuf.count != positionBuf.count ||
-            tangentBuf.count != positionBuf.count ||
-            uvBuf.count != positionBuf.count
-        ) {
-            std::cout << "Error: buffer sizes don't match\n";
-            return exitPrompt(-1, shouldPrompt);
-        }
-
         // Write the mesh header
         JMeshHeader meshHeader;
         meshHeader.numVertices = positionBuf.count;
@@ -149,6 +140,15 @@ int main(int argc, char* argv[]) {
             " vertices and " << 
             meshHeader.numIndices << 
             " indices\n"; 
+
+        if (
+            normalBuf.count != positionBuf.count ||
+            tangentBuf.count != positionBuf.count ||
+            uvBuf.count != positionBuf.count
+        ) {
+            std::cout << "\tError: buffer sizes don't match\n";
+            return exitPrompt(-1, shouldPrompt);
+        }
 
         // Write each vertex of the mesh one-by-one
         std::cout << "\t\tWriting vertices\n";
