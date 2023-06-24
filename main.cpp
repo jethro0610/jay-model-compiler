@@ -4,6 +4,7 @@
 
 #include <tiny_gltf.h>
 #include <glm/glm.hpp>
+#include <glm/gtx/string_cast.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -60,26 +61,52 @@ struct JStaticVertex {
     glm::vec2 uv;
 };
 
-int main() {
+int exitPrompt(int exitCode, bool shouldPrompt) {
+    if (shouldPrompt) {
+        std::cout << "Press ENTER to close\n";
+        std::cin.ignore();
+    }
+    return exitCode; 
+}
+
+int main(int argc, char* argv[]) {
     Model model;
     TinyGLTF loader;
     std::string err;
     std::string warn;
 
-    std::string path = "st_test.glb";
+    bool shouldPrompt = true;
+    if (argc >= 4) {
+        if (std::string(argv[3]) == "noprompt")
+            shouldPrompt = false;
+    }
 
+    if (argc < 2) { 
+        std::cout << "Error: missing input file\n";
+        return exitPrompt(-1, shouldPrompt);
+    }
+
+    std::string path = argv[1];
     bool isLoaded = loader.LoadBinaryFromFile(&model, &err, &warn, path); 
     if (!isLoaded) {
-        std::cout << err;
-        return -1;
+        std::cout << "Error: " << err << '\n';
+        return exitPrompt(-1, shouldPrompt);
     }
     std::cout << "Loaded file \"" << path << "\"\n";
 
+    std::string outPath;
+    if (argc >= 3)
+        outPath = argv[2];
+    else {
+        outPath = path.substr(0, path.size() - 4);
+        outPath += ".jmd";
+    }
+
     std::ofstream file;
-    file.open("st_test.jmd", std::ios::out | std::ios::binary);
+    file.open(outPath, std::ios::out | std::ios::binary);
     if (!file.is_open()) {
-        std::cout << "Failed to create new JMD file\n";
-        return -1;
+        std::cout << "Error: Failed to create new JMD file\n";
+        return exitPrompt(-1, shouldPrompt);
     }
 
     std::vector<Mesh> meshes;
@@ -97,22 +124,22 @@ int main() {
     for (Mesh mesh : meshes) {
         // Get the meshes buffers
         JBuffer positionBuf = GetBuffer(model, mesh, "POSITION");
-        JBuffer indices = GetIndices(model, mesh);
+        JBuffer indicesBuf = GetIndices(model, mesh);
 
         // Write the mesh header
         JMeshHeader meshHeader;
         meshHeader.numVertices = positionBuf.count;
-        meshHeader.numIndices = indices.count;
+        meshHeader.numIndices = indicesBuf.count;
         file.write((const char*)&meshHeader, sizeof(JMeshHeader));
         std::cout << 
-            "Compiling mesh with " << 
+            "\tCompiling mesh with " << 
             meshHeader.numVertices << 
             " vertices and " << 
             meshHeader.numIndices << 
             " indices\n"; 
 
         // Write each vertex of the mesh one-by-one
-        std::cout << "Writing vertices\n";
+        std::cout << "\t\tWriting vertices\n";
         for (int i = 0; i < positionBuf.count; i++) {
             JStaticVertex vertex;
             vertex.position = ((vec3*)positionBuf.data)[i];
@@ -125,9 +152,11 @@ int main() {
         }
 
         // Write the indices buffer of the mesh
-        std::cout << "Writing indices\n";
-        file.write((const char*)&indices.data, sizeof(uint16_t) * indices.count);
+        std::cout << "\t\tWriting indices\n";
+        file.write((const char*)indicesBuf.data, sizeof(uint16_t) * indicesBuf.count);
     }
+    file.close();
+    std::cout << "Finished compiling to file \"" << outPath << "\"\n";
 
-    return 0;
+    return exitPrompt(0, shouldPrompt);
 }
