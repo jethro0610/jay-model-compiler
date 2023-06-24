@@ -124,7 +124,19 @@ int main(int argc, char* argv[]) {
     for (Mesh mesh : meshes) {
         // Get the meshes buffers
         JBuffer positionBuf = GetBuffer(model, mesh, "POSITION");
+        JBuffer normalBuf = GetBuffer(model, mesh, "NORMAL");
+        JBuffer tangentBuf = GetBuffer(model, mesh, "TANGENT");
+        JBuffer uvBuf = GetBuffer(model, mesh, "TEXCOORD_0");
         JBuffer indicesBuf = GetIndices(model, mesh);
+
+        if (
+            normalBuf.count != positionBuf.count ||
+            tangentBuf.count != positionBuf.count ||
+            uvBuf.count != positionBuf.count
+        ) {
+            std::cout << "Error: buffer sizes don't match\n";
+            return exitPrompt(-1, shouldPrompt);
+        }
 
         // Write the mesh header
         JMeshHeader meshHeader;
@@ -143,11 +155,11 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < positionBuf.count; i++) {
             JStaticVertex vertex;
             vertex.position = ((vec3*)positionBuf.data)[i];
-            vertex.normal = vec3(0.0f);
-            vertex.tangent = vec3(0.0f);
-            vertex.bitangent = vec3(0.0f);
-            vertex.uv = vec2(0.0f);
-
+            vertex.normal = ((vec3*)normalBuf.data)[i];
+            vec4 tan4 = ((vec4*)tangentBuf.data)[i];
+            vertex.tangent = vec3(tan4);
+            vertex.bitangent = normalize(cross(vertex.normal, vertex.tangent) * tan4.w);
+            vertex.uv = ((vec2*)uvBuf.data)[i];
             file.write((const char*)&vertex, sizeof(JStaticVertex));
         }
 
