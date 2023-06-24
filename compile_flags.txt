@@ -1,1 +1,2 @@
--I./Libraries
+-I./Libraries/tinygltf
+-I./Libraries/glm

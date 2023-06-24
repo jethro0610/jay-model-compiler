@@ -8,5 +8,6 @@ file(GLOB SOURCES
     main.cpp
 )
 
-include_directories("Libraries/")
+include_directories("Libraries/tinygltf")
+include_directories("Libraries/glm")
 add_executable(JayModelCompiler ${SOURCES})
