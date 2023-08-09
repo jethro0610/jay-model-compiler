@@ -5,6 +5,8 @@
 #include <tiny_gltf.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/compatibility.hpp>
+#include <glm/gtx/quaternion.hpp>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -109,10 +111,30 @@ int main(int argc, char* argv[]) {
         return exitPrompt(-1, shouldPrompt);
     }
 
-    std::vector<Mesh> meshes;
+    typedef std::pair<Mesh, mat4> MeshAndMatrix;
+    std::vector<MeshAndMatrix> meshes;
     for (Node node : model.nodes) {
         int meshIndex = node.mesh;
-        meshes.push_back(model.meshes[node.mesh]);
+
+        vec3 position = vec3(0.0f);
+        vec3 wScale = vec3(1.0f);
+        quat rotation = quat(vec3(0.0f));
+
+        for (int i = 0; i < node.translation.size(); i++)
+            position[i] = node.translation[i];
+
+        for (int i = 0; i < node.scale.size(); i++)
+            wScale[i] = node.scale[i];
+
+        for (int i = 0; i < node.rotation.size(); i++)
+            rotation[i] = node.rotation[i];
+
+        mat4 worldMatrix = mat4(1.0f);
+        worldMatrix = translate(worldMatrix, position);
+        worldMatrix *= toMat4(rotation); 
+        worldMatrix = scale(worldMatrix, wScale);
+
+        meshes.push_back(MeshAndMatrix(model.meshes[node.mesh], worldMatrix));
     }
 
     // Write the model header
@@ -121,7 +143,11 @@ int main(int argc, char* argv[]) {
     file.write((const char*)&modelHeader, sizeof(JModelHeader));
     std::cout << "Compiling model with " << modelHeader.numMeshes << " meshes\n";
 
-    for (Mesh mesh : meshes) {
+    for (MeshAndMatrix meshAndMatrix : meshes) {
+        Mesh& mesh = meshAndMatrix.first;
+        mat4 worldMatrix = meshAndMatrix.second;
+        mat3 normalMatrix = transpose(inverse(mat3(worldMatrix)));
+
         // Get the meshes buffers
         JBuffer positionBuf = GetBuffer(model, mesh, "POSITION");
         JBuffer normalBuf = GetBuffer(model, mesh, "NORMAL");
@@ -135,7 +161,9 @@ int main(int argc, char* argv[]) {
         meshHeader.numIndices = indicesBuf.count;
         file.write((const char*)&meshHeader, sizeof(JMeshHeader));
         std::cout << 
-            "\tCompiling mesh with " << 
+            "\tCompiling mesh " <<
+            mesh.name << 
+            " with " << 
             meshHeader.numVertices << 
             " vertices and " << 
             meshHeader.numIndices << 
@@ -154,10 +182,10 @@ int main(int argc, char* argv[]) {
         std::cout << "\t\tWriting vertices\n";
         for (int i = 0; i < positionBuf.count; i++) {
             JStaticVertex vertex;
-            vertex.position = ((vec3*)positionBuf.data)[i];
-            vertex.normal = ((vec3*)normalBuf.data)[i];
+            vertex.position = worldMatrix * vec4(((vec3*)positionBuf.data)[i], 1.0f);
+            vertex.normal = normalize(normalMatrix * ((vec3*)normalBuf.data)[i]);
             vec4 tan4 = ((vec4*)tangentBuf.data)[i];
-            vertex.tangent = vec3(tan4);
+            vertex.tangent = normalize(normalMatrix * vec3(tan4));
             vertex.bitangent = normalize(cross(vertex.normal, vertex.tangent) * tan4.w);
             vertex.uv = ((vec2*)uvBuf.data)[i];
             file.write((const char*)&vertex, sizeof(JStaticVertex));
