@@ -15,6 +15,7 @@
 using namespace tinygltf;
 using namespace glm;
 
+const int MAX_JOINTS = 32;
 const int MAX_JOINT_CHILDREN = 8;
 
 struct JTransform {
@@ -33,10 +34,41 @@ struct JMeshHeader {
     int numIndices;
 };
 
+struct JStaticVertex {
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec3 tangent;
+    glm::vec3 bitangent;
+    glm::vec2 uv;
+};
+
+struct JSkeletalVertex {
+    glm::vec3 position;
+    glm::vec3 normal;
+    glm::vec3 tangent;
+    glm::vec3 bitangent;
+    glm::vec2 uv;
+    glm::ivec4 joints;
+    glm::vec4 weights;
+};
+
+struct JAnimHeader {
+    int numKeyframes;
+};
+
 struct JJoint {
     JTransform transform;
     glm::mat4 inverseBindMatrix;
     int children[MAX_JOINT_CHILDREN];
+};
+
+struct JKeyframe {
+    float time;
+    JTransform transform[MAX_JOINTS];
+};
+
+struct JAnim {
+    std::vector<JKeyframe> keyframes;
 };
 
 struct JBuffer {
@@ -72,24 +104,6 @@ JBuffer GetIndices(Model& model, Mesh& mesh) {
         accessor.count
     };
 }
-
-struct JStaticVertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec3 tangent;
-    glm::vec3 bitangent;
-    glm::vec2 uv;
-};
-
-struct JSkeletalVertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec3 tangent;
-    glm::vec3 bitangent;
-    glm::vec2 uv;
-    glm::ivec4 joints;
-    glm::vec4 weights;
-};
 
 JSkeletalVertex StaticVertexToSkeletal(JStaticVertex staticVertex) {
     JSkeletalVertex skeletalVertex;
@@ -313,6 +327,50 @@ int main(int argc, char* argv[]) {
 
         std::cout << "\tWriting joint " << j << '\n';
         file.write((const char*)&joint, sizeof(joint));
+    }
+
+    for (Animation anim : model.animations) {
+        std::cout << "Compiling animation \"" << anim.name << "\"\n";
+
+        // Get the time and number of keyframes for the animation
+        JBuffer timeBuffer = GetBufferFromAccessor(model, model.accessors[anim.samplers[0].input]);
+        std::vector<JKeyframe> keyframes;
+        keyframes.resize(timeBuffer.count);
+
+        // Write the animation header
+        JAnimHeader animHeader;
+        animHeader.numKeyframes = keyframes.size();
+        file.write((const char*)&animHeader, sizeof(animHeader));
+
+        // Copy the keyframe times
+        for (int i = 0; i < keyframes.size(); i++)
+            keyframes[i].time = ((float*)timeBuffer.data)[i];
+
+        // Create the keyframes for every joint
+        for (int i = 0; i < modelHeader.numJoints; i++) {
+            AnimationChannel posChannel = anim.channels[i * 3 + 0]; 
+            AnimationSampler posSampler = anim.samplers[posChannel.sampler];
+            JBuffer posBuffer = GetBufferFromAccessor(model, model.accessors[posSampler.output]);
+            int targetJoint = nodeIndexToJointIndex[posChannel.target_node];
+
+            AnimationChannel rotChannel = anim.channels[i * 3 + 1]; 
+            AnimationSampler rotSampler = anim.samplers[rotChannel.sampler];
+            JBuffer rotBuffer = GetBufferFromAccessor(model, model.accessors[rotSampler.output]);
+
+            AnimationChannel scaleChannel = anim.channels[i * 3 + 2]; 
+            AnimationSampler scaleSampler = anim.samplers[posChannel.sampler];
+            JBuffer scaleBuffer = GetBufferFromAccessor(model, model.accessors[scaleSampler.output]);
+        
+            for (int k = 0; k < keyframes.size(); k++) {
+                keyframes[k].transform[targetJoint].position = ((vec3*)posBuffer.data)[k];
+                keyframes[k].transform[targetJoint].rotation = ((quat*)rotBuffer.data)[k];
+                keyframes[k].transform[targetJoint].scale = ((vec3*)scaleBuffer.data)[k];
+            }
+        }
+
+        // Write the keyframees to the file
+        for (JKeyframe& keyframe : keyframes)
+            file.write((const char*)&keyframe, sizeof(JKeyframe));
     }
 
     file.close();
