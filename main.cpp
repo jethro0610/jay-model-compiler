@@ -155,8 +155,7 @@ int main(int argc, char* argv[]) {
     }
 
     // Determine the transform of each mesh and its gltf mesh,
-    // this is stored as a pair so we can iterate and relate the
-    // two
+    // this is stored as a pair so we can iterate and relate the two
     typedef std::pair<Mesh, mat4> MeshAndMatrix;
     std::vector<MeshAndMatrix> meshes;
     for (Node node : model.nodes) {
@@ -170,10 +169,8 @@ int main(int argc, char* argv[]) {
 
         for (int i = 0; i < node.translation.size(); i++)
             position[i] = node.translation[i];
-
         for (int i = 0; i < node.scale.size(); i++)
             wScale[i] = node.scale[i];
-
         for (int i = 0; i < node.rotation.size(); i++)
             rotation[i] = node.rotation[i];
 
@@ -272,7 +269,7 @@ int main(int argc, char* argv[]) {
         file.write((const char*)indicesBuf.data, sizeof(uint16_t) * indicesBuf.count);
     }
 
-    // If there are no skins (skeletons), then we can stop writing to the file and exit
+    // If there's no skeleton, then we can stop writing to the model
     if (modelHeader.numJoints == 0) {
         file.close();
         std::cout << "Finished compiling static model to file \"" << outPath << "\"\n";
@@ -282,6 +279,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Compiling skeleton joints\n";
     Accessor ibmAccessor = model.accessors[model.skins[0].inverseBindMatrices];
     JBuffer ibmBuffer = GetBufferFromAccessor(model, ibmAccessor);
+    assert(ibmBuffer.count == modelHeader.numJoints);
 
     // Children of joints are stored as nodes, but we need
     // their actual joint index to bind properly. Since node
