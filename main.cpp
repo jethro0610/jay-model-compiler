@@ -34,6 +34,12 @@ struct JMeshHeader {
     int numIndices;
 };
 
+struct gltfMeshData {
+    Mesh mesh;
+    mat4 worldMatrix;
+    std::string name;
+};
+
 struct JStaticVertex {
     glm::vec3 position;
     glm::vec3 normal;
@@ -115,6 +121,11 @@ JSkeletalVertex StaticVertexToSkeletal(JStaticVertex staticVertex) {
     return skeletalVertex;
 }
 
+typedef std::pair<Node, mat4> NodeAndMatrix;
+bool CompareNodePair(const NodeAndMatrix& a, const NodeAndMatrix& b) {
+    return a.first.name < b.first.name;
+}
+
 int exitPrompt(int exitCode, bool shouldPrompt) {
     if (shouldPrompt) {
         std::cout << "Press ENTER to close\n";
@@ -170,8 +181,7 @@ int main(int argc, char* argv[]) {
 
     // Determine the transform of each mesh and its gltf mesh,
     // this is stored as a pair so we can iterate and relate the two
-    typedef std::pair<Mesh, mat4> MeshAndMatrix;
-    std::vector<MeshAndMatrix> meshes;
+    std::vector<NodeAndMatrix> meshNodes;
     for (Node node : model.nodes) {
         int meshIndex = node.mesh;
         if (meshIndex == -1)
@@ -193,13 +203,14 @@ int main(int argc, char* argv[]) {
         worldMatrix *= toMat4(rotation); 
         worldMatrix = scale(worldMatrix, wScale);
 
-        meshes.push_back(MeshAndMatrix(model.meshes[node.mesh], worldMatrix));
+        meshNodes.push_back(NodeAndMatrix(node, worldMatrix));
     }
+    std::sort(meshNodes.begin(), meshNodes.end(), CompareNodePair);
 
     // Write the model header
     JModelHeader modelHeader;
     bool skeletal = false;
-    modelHeader.numMeshes = meshes.size();
+    modelHeader.numMeshes = meshNodes.size();
     modelHeader.numJoints = 0;
     if (model.skins.size() != 0) { 
         modelHeader.numJoints = model.skins[0].joints.size();
@@ -209,9 +220,9 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Compiling model with " << modelHeader.numMeshes << " meshes\n";
 
-    for (MeshAndMatrix meshAndMatrix : meshes) {
-        Mesh& mesh = meshAndMatrix.first;
-        mat4 worldMatrix = meshAndMatrix.second;
+    for (NodeAndMatrix nodeAndMatrix : meshNodes) {
+        Mesh& mesh = model.meshes[nodeAndMatrix.first.mesh];
+        mat4 worldMatrix = nodeAndMatrix.second;
         mat3 normalMatrix = transpose(inverse(mat3(worldMatrix)));
 
         // Get the meshes buffers
@@ -232,7 +243,7 @@ int main(int argc, char* argv[]) {
         file.write((const char*)&meshHeader, sizeof(JMeshHeader));
         std::cout << 
             "\tCompiling mesh " <<
-            mesh.name << 
+            nodeAndMatrix.first.name << 
             " with " << 
             meshHeader.numVertices << 
             " vertices and " << 
@@ -251,7 +262,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Write each vertex of the mesh one-by-one
-        std::cout << "\t\tWriting vertices\n";
+        // std::cout << "\t\tWriting vertices\n";
         for (int i = 0; i < positionBuf.count; i++) {
             JStaticVertex vertex;
             vertex.position = worldMatrix * vec4(((vec3*)positionBuf.data)[i], 1.0f);
@@ -279,9 +290,10 @@ int main(int argc, char* argv[]) {
         }
 
         // Write the indices buffer of the mesh
-        std::cout << "\t\tWriting indices\n";
+        // std::cout << "\t\tWriting indices\n";
         file.write((const char*)indicesBuf.data, sizeof(uint16_t) * indicesBuf.count);
     }
+    std::cout << '\n';
 
     // If there's no skeleton, then we can stop writing to the model
     if (modelHeader.numJoints == 0) {
@@ -307,6 +319,11 @@ int main(int argc, char* argv[]) {
         // Get the node corresponding to the joint
         Node node = model.nodes[model.skins[0].joints[j]];
         JJoint joint; 
+        std::cout << "\tCompiling joint "  << node.name;
+        if (node.children.size() > 0)
+            std::cout << " with children:\n";
+        else
+            std::cout << '\n';
 
         // Copy the joint transform
         for (int i = 0; i < node.translation.size(); i++)
@@ -322,15 +339,17 @@ int main(int argc, char* argv[]) {
         // Copy the joint's children, this is where the node
         // to joint conversion occurs
         assert(node.children.size() <= MAX_JOINT_CHILDREN);
-        for (int i = 0; i < node.children.size(); i++)
+        for (int i = 0; i < node.children.size(); i++) {
             joint.children[i] = nodeIndexToJointIndex[node.children[i]];
+            std::cout << "\t\t" << model.nodes[node.children[i]].name << '\n';
+        }
 
-        std::cout << "\tWriting joint " << j << '\n';
         file.write((const char*)&joint, sizeof(joint));
     }
+    std::cout << '\n';
 
+    std::cout << "Compiling animations\n";
     for (Animation anim : model.animations) {
-        std::cout << "Compiling animation \"" << anim.name << "\"\n";
 
         // Get the time and number of keyframes for the animation
         JBuffer timeBuffer = GetBufferFromAccessor(model, model.accessors[anim.samplers[0].input]);
@@ -341,6 +360,8 @@ int main(int argc, char* argv[]) {
         JAnimHeader animHeader;
         animHeader.numKeyframes = keyframes.size();
         file.write((const char*)&animHeader, sizeof(animHeader));
+
+        std::cout << "\tCompiling animation " << anim.name << " with " << keyframes.size() << " keyframes\n";
 
         // Copy the keyframe times
         for (int i = 0; i < keyframes.size(); i++)
@@ -372,6 +393,7 @@ int main(int argc, char* argv[]) {
         for (JKeyframe& keyframe : keyframes)
             file.write((const char*)&keyframe, sizeof(JKeyframe));
     }
+    std::cout << '\n';
 
     file.close();
     std::cout << "Finished compiling skeletal model to file \"" << outPath << "\"\n";
