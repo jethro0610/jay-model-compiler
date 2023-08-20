@@ -1,8 +1,3 @@
-#define TINYGLTF_IMPLEMENTATION
-#define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-
-#include <tiny_gltf.h>
 #include <glm/glm.hpp>
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtx/compatibility.hpp>
@@ -11,108 +6,25 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include "buffer.hpp"
+#include "definitions.hpp"
 
-using namespace tinygltf;
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <tiny_gltf.h>
+
+namespace gltf = tinygltf;
 using namespace glm;
 
-const int MAX_JOINTS = 32;
-const int MAX_JOINT_CHILDREN = 8;
-
-struct JTransform {
-    glm::vec3 position;
-    glm::quat rotation;
-    glm::vec3 scale;
-};
-
-struct JModelHeader {
-    int numMeshes;
-    int numJoints;
-};
-
-struct JMeshHeader {
-    int numVertices;
-    int numIndices;
-};
-
 struct gltfMeshData {
-    Mesh mesh;
+    tinygltf::Mesh mesh;
     mat4 worldMatrix;
     std::string name;
 };
 
-struct JStaticVertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec3 tangent;
-    glm::vec3 bitangent;
-    glm::vec2 uv;
-};
-
-struct JSkeletalVertex {
-    glm::vec3 position;
-    glm::vec3 normal;
-    glm::vec3 tangent;
-    glm::vec3 bitangent;
-    glm::vec2 uv;
-    glm::u8vec4 joints;
-    glm::vec4 weights;
-};
-
-struct JAnimHeader {
-    int numKeyframes;
-};
-
-struct JJoint {
-    JTransform transform;
-    glm::mat4 inverseBindMatrix;
-    int children[MAX_JOINT_CHILDREN];
-};
-
-struct JKeyframe {
-    float time;
-    JTransform transform[MAX_JOINTS];
-};
-
-struct JAnim {
-    std::vector<JKeyframe> keyframes;
-};
-
-struct JBuffer {
-    void* data;
-    size_t count;
-};
-
-JBuffer GetBufferFromAccessor(Model& model, Accessor& accessor) {
-    BufferView& view = model.bufferViews[accessor.bufferView];
-    Buffer& buffer = model.buffers[view.buffer];
-
-    int dataOffset = view.byteOffset + accessor.byteOffset;
-    return {
-        &buffer.data[dataOffset],
-        accessor.count
-    };
-}
-
-JBuffer GetBuffer(Model& model, Mesh& mesh, std::string attributeName) {
-    Accessor accessor = model.accessors[mesh.primitives[0].attributes.at(attributeName)];
-    return GetBufferFromAccessor(model, accessor);
-};
-
-JBuffer GetIndices(Model& model, Mesh& mesh) {
-    Accessor accessor = model.accessors[mesh.primitives[0].indices];
-
-    BufferView& view = model.bufferViews[accessor.bufferView];
-    Buffer& buffer = model.buffers[view.buffer];
-
-    int dataOffset = view.byteOffset + accessor.byteOffset;
-    return {
-        &buffer.data[dataOffset],
-        accessor.count
-    };
-}
-
-JSkeletalVertex StaticVertexToSkeletal(JStaticVertex staticVertex) {
-    JSkeletalVertex skeletalVertex;
+SkeletalVertex StaticVertexToSkeletal(StaticVertex staticVertex) {
+    SkeletalVertex skeletalVertex;
     skeletalVertex.position = staticVertex.position;
     skeletalVertex.normal = staticVertex.normal;
     skeletalVertex.tangent = staticVertex.tangent;
@@ -121,12 +33,12 @@ JSkeletalVertex StaticVertexToSkeletal(JStaticVertex staticVertex) {
     return skeletalVertex;
 }
 
-typedef std::pair<Node, mat4> NodeAndMatrix;
+typedef std::pair<gltf::Node, mat4> NodeAndMatrix;
 bool CompareNodePair(const NodeAndMatrix& a, const NodeAndMatrix& b) {
     return a.first.name < b.first.name;
 }
 
-int exitPrompt(int exitCode, bool shouldPrompt) {
+int ExitPrompt(int exitCode, bool shouldPrompt) {
     if (shouldPrompt) {
         std::cout << "Press ENTER to close\n";
         std::cin.ignore();
@@ -135,8 +47,8 @@ int exitPrompt(int exitCode, bool shouldPrompt) {
 }
 
 int main(int argc, char* argv[]) {
-    Model model;
-    TinyGLTF loader;
+    gltf::Model gltfModel;
+    gltf::TinyGLTF loader;
     std::string err;
     std::string warn;
 
@@ -150,15 +62,15 @@ int main(int argc, char* argv[]) {
     // No file was given
     if (argc < 2) { 
         std::cout << "Error: missing input file\n";
-        return exitPrompt(-1, shouldPrompt);
+        return ExitPrompt(-1, shouldPrompt);
     }
 
     // Load the gltf model
     std::string path = argv[1];
-    bool isLoaded = loader.LoadASCIIFromFile(&model, &err, &warn, path); 
+    bool isLoaded = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, path); 
     if (!isLoaded) {
         std::cout << "Error: " << err << '\n';
-        return exitPrompt(-1, shouldPrompt);
+        return ExitPrompt(-1, shouldPrompt);
     }
     std::cout << "Loaded file \"" << path << "\"\n";
 
@@ -176,13 +88,13 @@ int main(int argc, char* argv[]) {
     file.open(outPath, std::ios::out | std::ios::binary);
     if (!file.is_open()) {
         std::cout << "Error: Failed to create new JMD file\n";
-        return exitPrompt(-1, shouldPrompt);
+        return ExitPrompt(-1, shouldPrompt);
     }
 
     // Determine the transform of each mesh and its gltf mesh,
     // this is stored as a pair so we can iterate and relate the two
     std::vector<NodeAndMatrix> meshNodes;
-    for (Node node : model.nodes) {
+    for (gltf::Node node : gltfModel.nodes) {
         int meshIndex = node.mesh;
         if (meshIndex == -1)
             continue;
@@ -208,39 +120,40 @@ int main(int argc, char* argv[]) {
     std::sort(meshNodes.begin(), meshNodes.end(), CompareNodePair);
 
     // Write the model header
-    JModelHeader modelHeader;
+    ModelHeader modelHeader;
     bool skeletal = false;
     modelHeader.numMeshes = meshNodes.size();
-    modelHeader.numJoints = 0;
-    if (model.skins.size() != 0) { 
-        modelHeader.numJoints = model.skins[0].joints.size();
+    modelHeader.numAnimations = 0;
+    if (gltfModel.skins.size() != 0) { 
         skeletal = true;
+        modelHeader.skeletal = true;
+        modelHeader.numAnimations = gltfModel.animations.size();
     }
-    file.write((const char*)&modelHeader, sizeof(JModelHeader));
+    file.write((const char*)&modelHeader, sizeof(ModelHeader));
 
     std::cout << "Compiling model with " << modelHeader.numMeshes << " meshes\n";
 
     for (NodeAndMatrix nodeAndMatrix : meshNodes) {
-        Mesh& mesh = model.meshes[nodeAndMatrix.first.mesh];
+        gltf::Mesh& gltfMesh= gltfModel.meshes[nodeAndMatrix.first.mesh];
         mat4 worldMatrix = nodeAndMatrix.second;
         mat3 normalMatrix = transpose(inverse(mat3(worldMatrix)));
 
         // Get the meshes buffers
-        JBuffer positionBuf = GetBuffer(model, mesh, "POSITION");
-        JBuffer normalBuf = GetBuffer(model, mesh, "NORMAL");
-        JBuffer tangentBuf = GetBuffer(model, mesh, "TANGENT");
-        JBuffer uvBuf = GetBuffer(model, mesh, "TEXCOORD_0");
-        JBuffer indicesBuf = GetIndices(model, mesh);
+        Buffer<vec3> positionBuf(gltfModel, gltfMesh, "POSITION");
+        Buffer<vec3> normalBuf(gltfModel, gltfMesh, "NORMAL");
+        Buffer<vec4> tangentBuf(gltfModel, gltfMesh, "TANGENT");
+        Buffer<vec2> uvBuf(gltfModel, gltfMesh, "TEXCOORD_0");
+        Buffer<uint16_t> indicesBuf(gltfModel, gltfMesh, "INDICES");
 
         // Get the skeletal buffers
-        JBuffer jointBuf = skeletal ? GetBuffer(model, mesh, "JOINTS_0") : JBuffer();
-        JBuffer weightBuf = skeletal ? GetBuffer(model, mesh, "WEIGHTS_0") : JBuffer();
+        Buffer<u8vec4> jointBuf = Buffer<u8vec4>(gltfModel, gltfMesh, skeletal ? "JOINTS_0" : "INDICES");
+        Buffer<vec4> weightBuf = Buffer<vec4>(gltfModel, gltfMesh, skeletal ? "WEIGHTS_0" : "INDICES");
 
         // Write the mesh header
-        JMeshHeader meshHeader;
-        meshHeader.numVertices = positionBuf.count;
-        meshHeader.numIndices = indicesBuf.count;
-        file.write((const char*)&meshHeader, sizeof(JMeshHeader));
+        MeshHeader meshHeader;
+        meshHeader.numVertices = positionBuf.size();
+        meshHeader.numIndices = indicesBuf.size();
+        file.write((const char*)&meshHeader, sizeof(MeshHeader));
         std::cout << 
             "\tCompiling mesh " <<
             nodeAndMatrix.first.name << 
@@ -253,67 +166,68 @@ int main(int argc, char* argv[]) {
         // Ensure the buffer sizes match, otherwise the mesh
         // is invalid or something in the compiler is wrong
         if (
-            normalBuf.count != positionBuf.count ||
-            tangentBuf.count != positionBuf.count ||
-            uvBuf.count != positionBuf.count
+            normalBuf.size() != positionBuf.size() ||
+            tangentBuf.size() != positionBuf.size() ||
+            uvBuf.size() != positionBuf.size()
         ) {
             std::cout << "\tError: buffer sizes don't match\n";
-            return exitPrompt(-1, shouldPrompt);
+            return ExitPrompt(-1, shouldPrompt);
         }
 
         // Write each vertex of the mesh one-by-one
         // std::cout << "\t\tWriting vertices\n";
-        for (int i = 0; i < positionBuf.count; i++) {
-            JStaticVertex vertex;
-            vertex.position = worldMatrix * vec4(((vec3*)positionBuf.data)[i], 1.0f);
-            vertex.normal = normalize(normalMatrix * ((vec3*)normalBuf.data)[i]);
-            vec4 tan4 = ((vec4*)tangentBuf.data)[i];
+        for (int i = 0; i < positionBuf.size(); i++) {
+            StaticVertex vertex;
+            vertex.position = worldMatrix * vec4(positionBuf[i], 1.0f);
+            vertex.normal = normalize(normalMatrix * normalBuf[i]);
+            vec4 tan4 = tangentBuf[i];
             vertex.tangent = normalize(normalMatrix * vec3(tan4));
             vertex.bitangent = normalize(cross(vertex.normal, vertex.tangent) * tan4.w);
-            vertex.uv = ((vec2*)uvBuf.data)[i];
+            vertex.uv = uvBuf[i];
 
             // Write the skeletal data
             if (skeletal) {
-                JSkeletalVertex skeletalVertex = StaticVertexToSkeletal(vertex);
-                skeletalVertex.joints = ((u8vec4*)jointBuf.data)[i];
-                std::cout << "Joints: " << glm::to_string(skeletalVertex.joints) << '\n';
-                skeletalVertex.weights = ((vec4*)weightBuf.data)[i];
-                file.write((const char*)&skeletalVertex, sizeof(JSkeletalVertex));
+                SkeletalVertex skeletalVertex = StaticVertexToSkeletal(vertex);
+                skeletalVertex.joints = jointBuf[i];
+                skeletalVertex.weights = weightBuf[i];
+                file.write((const char*)&skeletalVertex, sizeof(SkeletalVertex));
             }
             else
-                file.write((const char*)&vertex, sizeof(JStaticVertex));
+                file.write((const char*)&vertex, sizeof(StaticVertex));
         }
 
         // Write the indices buffer of the mesh
         // std::cout << "\t\tWriting indices\n";
-        file.write((const char*)indicesBuf.data, sizeof(uint16_t) * indicesBuf.count);
+        file.write((const char*)indicesBuf.data(), sizeof(uint16_t) * indicesBuf.size());
     }
     std::cout << '\n';
 
     // If there's no skeleton, then we can stop writing to the model
-    if (modelHeader.numJoints == 0) {
+    if (!skeletal) {
         file.close();
         std::cout << "Finished compiling static model to file \"" << outPath << "\"\n";
-        return exitPrompt(0, shouldPrompt);
+        return ExitPrompt(0, shouldPrompt);
     }
 
     std::cout << "Compiling skeleton joints\n";
-    Accessor ibmAccessor = model.accessors[model.skins[0].inverseBindMatrices];
-    JBuffer ibmBuffer = GetBufferFromAccessor(model, ibmAccessor);
-    assert(ibmBuffer.count == modelHeader.numJoints);
+    int numJoints = gltfModel.skins[0].joints.size();
+    gltf::Accessor ibmAccessor = gltfModel.accessors[gltfModel.skins[0].inverseBindMatrices];
+    Buffer<mat4> ibmBuffer(gltfModel, ibmAccessor);
+    assert(ibmBuffer.size() == numJoints);
 
     // Children of joints are stored as nodes, but we need
     // their actual joint index to bind properly. Since node
     // and joint indices can be different, a map is necessary
     // to know which node corresponds to which joint
     std::map<int, int> nodeIndexToJointIndex;
-    for (int i = 0; i < modelHeader.numJoints; i++)
-        nodeIndexToJointIndex[model.skins[0].joints[i]] = i; 
+    for (int i = 0; i < numJoints; i++)
+        nodeIndexToJointIndex[gltfModel.skins[0].joints[i]] = i; 
 
-    for (int j = 0; j < modelHeader.numJoints; j++) {
+    Skeleton skeleton;
+    for (int j = 0; j < numJoints; j++) {
         // Get the node corresponding to the joint
-        Node node = model.nodes[model.skins[0].joints[j]];
-        JJoint joint; 
+        gltf::Node node = gltfModel.nodes[gltfModel.skins[0].joints[j]];
+        Joint joint; 
         std::cout << "\tCompiling joint "  << node.name;
         if (node.children.size() > 0)
             std::cout << " with children:\n";
@@ -329,68 +243,69 @@ int main(int argc, char* argv[]) {
             joint.transform.scale[i] = node.scale[i];
 
         // Copy the inverse bind matrix
-        joint.inverseBindMatrix = ((mat4*)ibmBuffer.data)[j];
+        joint.inverseBindMatrix = ibmBuffer[j];
 
         // Copy the joint's children, this is where the node
         // to joint conversion occurs
         assert(node.children.size() <= MAX_JOINT_CHILDREN);
         for (int i = 0; i < node.children.size(); i++) {
-            joint.children[i] = nodeIndexToJointIndex[node.children[i]];
-            std::cout << "\t\t" << model.nodes[node.children[i]].name << '\n';
+            joint.children.push_back(nodeIndexToJointIndex[node.children[i]]);
+            std::cout << "\t\t" << gltfModel.nodes[node.children[i]].name << '\n';
         }
-
-        file.write((const char*)&joint, sizeof(joint));
+        skeleton.joints.push_back(joint);
     }
+    file.write((const char*)&skeleton, sizeof(Skeleton));
     std::cout << '\n';
 
     std::cout << "Compiling animations\n";
-    for (Animation anim : model.animations) {
-
+    for (gltf::Animation gltfAnim : gltfModel.animations) {
         // Get the time and number of keyframes for the animation
-        JBuffer timeBuffer = GetBufferFromAccessor(model, model.accessors[anim.samplers[0].input]);
-        std::vector<JKeyframe> keyframes;
-        keyframes.resize(timeBuffer.count);
+        Buffer<float> timeBuffer(gltfModel, gltfModel.accessors[gltfAnim.samplers[0].input]);
+        Animation animation;
+        animation.keyframes.resize(timeBuffer.size());
 
         // Write the animation header
-        JAnimHeader animHeader;
-        animHeader.numKeyframes = keyframes.size();
+        AnimationHeader animHeader;
+        animHeader.numKeyframes = animation.keyframes.size();
+        gltfAnim.name.copy(animHeader.name, MAX_ANIM_NAME);
         file.write((const char*)&animHeader, sizeof(animHeader));
-
-        std::cout << "\tCompiling animation " << anim.name << " with " << keyframes.size() << " keyframes\n";
+        std::cout << "\tCompiling animation " << gltfAnim.name << " with " << animation.keyframes.size() << " keyframes\n";
 
         // Copy the keyframe times
-        for (int i = 0; i < keyframes.size(); i++)
-            keyframes[i].time = ((float*)timeBuffer.data)[i];
+        for (int i = 0; i < animation.keyframes.size(); i++)
+            animation.keyframes[i].time = timeBuffer[i];
 
         // Create the keyframes for every joint
-        for (int i = 0; i < modelHeader.numJoints; i++) {
-            AnimationChannel posChannel = anim.channels[i * 3 + 0]; 
-            AnimationSampler posSampler = anim.samplers[posChannel.sampler];
-            JBuffer posBuffer = GetBufferFromAccessor(model, model.accessors[posSampler.output]);
+        for (int i = 0; i < numJoints; i++) {
+            gltf::AnimationChannel posChannel = gltfAnim.channels[i * 3 + 0]; 
+            gltf::AnimationSampler posSampler = gltfAnim.samplers[posChannel.sampler];
+            Buffer<vec4> posBuffer(gltfModel, gltfModel.accessors[posSampler.output]);
             int targetJoint = nodeIndexToJointIndex[posChannel.target_node];
 
-            AnimationChannel rotChannel = anim.channels[i * 3 + 1]; 
-            AnimationSampler rotSampler = anim.samplers[rotChannel.sampler];
-            JBuffer rotBuffer = GetBufferFromAccessor(model, model.accessors[rotSampler.output]);
+            gltf::AnimationChannel rotChannel = gltfAnim.channels[i * 3 + 1]; 
+            gltf::AnimationSampler rotSampler = gltfAnim.samplers[rotChannel.sampler];
+            Buffer<quat> rotBuffer(gltfModel, gltfModel.accessors[rotSampler.output]);
 
-            AnimationChannel scaleChannel = anim.channels[i * 3 + 2]; 
-            AnimationSampler scaleSampler = anim.samplers[posChannel.sampler];
-            JBuffer scaleBuffer = GetBufferFromAccessor(model, model.accessors[scaleSampler.output]);
+            gltf::AnimationChannel scaleChannel = gltfAnim.channels[i * 3 + 2]; 
+            gltf::AnimationSampler scaleSampler = gltfAnim.samplers[posChannel.sampler];
+            Buffer<vec3> scaleBuffer(gltfModel, gltfModel.accessors[scaleSampler.output]);
         
-            for (int k = 0; k < keyframes.size(); k++) {
-                keyframes[k].transform[targetJoint].position = ((vec3*)posBuffer.data)[k];
-                keyframes[k].transform[targetJoint].rotation = ((quat*)rotBuffer.data)[k];
-                keyframes[k].transform[targetJoint].scale = ((vec3*)scaleBuffer.data)[k];
+            for (int k = 0; k < animation.keyframes.size(); k++) {
+                Transform transform;
+                transform.position = posBuffer[k];
+                transform.rotation = rotBuffer[k];
+                transform.scale = scaleBuffer[k];
+                animation.keyframes[i].transforms.push_back(transform);
             }
         }
 
         // Write the keyframees to the file
-        for (JKeyframe& keyframe : keyframes)
-            file.write((const char*)&keyframe, sizeof(JKeyframe));
+        for (Keyframe& keyframe : animation.keyframes)
+            file.write((const char*)&keyframe, sizeof(Keyframe));
     }
     std::cout << '\n';
 
     file.close();
     std::cout << "Finished compiling skeletal model to file \"" << outPath << "\"\n";
-    return exitPrompt(0, shouldPrompt);
+    return ExitPrompt(0, shouldPrompt);
 }

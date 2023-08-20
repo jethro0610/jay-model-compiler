@@ -11,4 +11,5 @@ file(GLOB SOURCES
 
 include_directories("Libraries/tinygltf")
 include_directories("Libraries/glm")
+include_directories("Libraries/vector_const")
 add_executable(JayModelCompiler ${SOURCES})

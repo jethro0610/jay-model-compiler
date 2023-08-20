@@ -1,2 +1,3 @@
 -I./Libraries/tinygltf
 -I./Libraries/glm
+-I./Libraries/vector_const
