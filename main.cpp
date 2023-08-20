@@ -54,7 +54,7 @@ struct JSkeletalVertex {
     glm::vec3 tangent;
     glm::vec3 bitangent;
     glm::vec2 uv;
-    glm::ivec4 joints;
+    glm::u8vec4 joints;
     glm::vec4 weights;
 };
 
@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
 
     // Load the gltf model
     std::string path = argv[1];
-    bool isLoaded = loader.LoadBinaryFromFile(&model, &err, &warn, path); 
+    bool isLoaded = loader.LoadASCIIFromFile(&model, &err, &warn, path); 
     if (!isLoaded) {
         std::cout << "Error: " << err << '\n';
         return exitPrompt(-1, shouldPrompt);
@@ -275,13 +275,8 @@ int main(int argc, char* argv[]) {
             // Write the skeletal data
             if (skeletal) {
                 JSkeletalVertex skeletalVertex = StaticVertexToSkeletal(vertex);
-
-                // Since gltf stores joint indices as an unsigned byte integer, 
-                // we need to convert the numbers to ivec4 comptatible format. 
-                // Index j is the component of the joint vector then.
-                for (int j = 0; j < 4; j++)
-                    skeletalVertex.joints[j] = ((uint8_t*)jointBuf.data)[i * 4 + j];
-
+                skeletalVertex.joints = ((u8vec4*)jointBuf.data)[i];
+                std::cout << "Joints: " << glm::to_string(skeletalVertex.joints) << '\n';
                 skeletalVertex.weights = ((vec4*)weightBuf.data)[i];
                 file.write((const char*)&skeletalVertex, sizeof(JSkeletalVertex));
             }
