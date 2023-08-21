@@ -79,8 +79,7 @@ int main(int argc, char* argv[]) {
     if (argc >= 3)
         outPath = argv[2];
     else {
-        outPath = path.substr(0, path.size() - 4);
-        outPath += ".jmd";
+        outPath = path.substr(0, path.size() - 4) + ".jmd";
     }
 
     // Create the file
@@ -124,6 +123,7 @@ int main(int argc, char* argv[]) {
     bool skeletal = false;
     modelHeader.numMeshes = meshNodes.size();
     modelHeader.numAnimations = 0;
+    modelHeader.skeletal = false;
     if (gltfModel.skins.size() != 0) { 
         skeletal = true;
         modelHeader.skeletal = true;
@@ -267,13 +267,15 @@ int main(int argc, char* argv[]) {
         // Write the animation header
         AnimationHeader animHeader;
         animHeader.numKeyframes = animation.keyframes.size();
-        gltfAnim.name.copy(animHeader.name, MAX_ANIM_NAME);
-        file.write((const char*)&animHeader, sizeof(animHeader));
-        std::cout << "\tCompiling animation " << gltfAnim.name << " with " << animation.keyframes.size() << " keyframes\n";
+        strcpy_s(animHeader.name, gltfAnim.name.c_str());
+        file.write((const char*)&animHeader, sizeof(AnimationHeader));
+        std::cout << "\tCompiling animation " << animHeader.name << " with " << animHeader.numKeyframes << " keyframes\n";
 
-        // Copy the keyframe times
-        for (int i = 0; i < animation.keyframes.size(); i++)
+        // Copy the keyframe times and size the transforms to the number of joints
+        for (int i = 0; i < animation.keyframes.size(); i++) { 
             animation.keyframes[i].time = timeBuffer[i];
+            animation.keyframes[i].transforms.resize(numJoints);
+        }
 
         // Create the keyframes for every joint
         for (int i = 0; i < numJoints; i++) {
@@ -289,13 +291,13 @@ int main(int argc, char* argv[]) {
             gltf::AnimationChannel scaleChannel = gltfAnim.channels[i * 3 + 2]; 
             gltf::AnimationSampler scaleSampler = gltfAnim.samplers[posChannel.sampler];
             Buffer<vec3> scaleBuffer(gltfModel, gltfModel.accessors[scaleSampler.output]);
-        
+
             for (int k = 0; k < animation.keyframes.size(); k++) {
                 Transform transform;
                 transform.position = posBuffer[k];
                 transform.rotation = rotBuffer[k];
                 transform.scale = scaleBuffer[k];
-                animation.keyframes[i].transforms.push_back(transform);
+                animation.keyframes[k].transforms[targetJoint] = transform;
             }
         }
 
