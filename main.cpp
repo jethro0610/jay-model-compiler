@@ -242,6 +242,7 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < node.scale.size(); i++)
             joint.transform.scale[i] = node.scale[i];
 
+
         // Copy the inverse bind matrix
         joint.inverseBindMatrix = ibmBuffer[j];
 
@@ -267,7 +268,7 @@ int main(int argc, char* argv[]) {
         // Write the animation header
         AnimationHeader animHeader;
         animHeader.numKeyframes = animation.keyframes.size();
-        strcpy_s(animHeader.name, gltfAnim.name.c_str());
+        strncpy(animHeader.name, gltfAnim.name.c_str(), MAX_ANIM_NAME);
         file.write((const char*)&animHeader, sizeof(AnimationHeader));
         std::cout << "\tCompiling animation " << animHeader.name << " with " << animHeader.numKeyframes << " keyframes\n";
 
