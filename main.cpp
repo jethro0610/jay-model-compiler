@@ -249,9 +249,9 @@ int main(int argc, char* argv[]) {
         // Copy the joint's children, this is where the node
         // to joint conversion occurs
         assert(node.children.size() <= MAX_JOINT_CHILDREN);
-        for (int i = 0; i < node.children.size(); i++) {
-            joint.children.push_back(nodeIndexToJointIndex[node.children[i]]);
-            std::cout << "\t\t" << gltfModel.nodes[node.children[i]].name << '\n';
+        for (int child : node.children) {
+            joint.children.push_back(nodeIndexToJointIndex[child]);
+            std::cout << "\t\t" << gltfModel.nodes[child].name << '\n';
         }
         skeleton.joints.push_back(joint);
     }
@@ -282,7 +282,7 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < numJoints; i++) {
             gltf::AnimationChannel posChannel = gltfAnim.channels[i * 3 + 0]; 
             gltf::AnimationSampler posSampler = gltfAnim.samplers[posChannel.sampler];
-            Buffer<vec4> posBuffer(gltfModel, gltfModel.accessors[posSampler.output]);
+            Buffer<vec3> posBuffer(gltfModel, gltfModel.accessors[posSampler.output]);
             int targetJoint = nodeIndexToJointIndex[posChannel.target_node];
 
             gltf::AnimationChannel rotChannel = gltfAnim.channels[i * 3 + 1]; 
@@ -290,7 +290,7 @@ int main(int argc, char* argv[]) {
             Buffer<quat> rotBuffer(gltfModel, gltfModel.accessors[rotSampler.output]);
 
             gltf::AnimationChannel scaleChannel = gltfAnim.channels[i * 3 + 2]; 
-            gltf::AnimationSampler scaleSampler = gltfAnim.samplers[posChannel.sampler];
+            gltf::AnimationSampler scaleSampler = gltfAnim.samplers[scaleChannel.sampler];
             Buffer<vec3> scaleBuffer(gltfModel, gltfModel.accessors[scaleSampler.output]);
 
             for (int k = 0; k < animation.keyframes.size(); k++) {

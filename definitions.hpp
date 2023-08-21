@@ -18,6 +18,16 @@ struct Transform {
         rotation = glm::quat(glm::vec3(0.0f, 0.0f, 0.0f));
         scale = glm::vec3(1.0f, 1.0f, 1.0f);
     }
+
+    glm::mat4 GetWorldMatrix() const {
+        glm::mat4 outWorld;
+        outWorld = glm::mat4(1.0f);
+        outWorld = translate(outWorld, position);
+        outWorld *= toMat4(rotation);
+        outWorld = glm::scale(outWorld, scale);
+
+        return outWorld;
+    }
 };
 
 struct ModelHeader {
