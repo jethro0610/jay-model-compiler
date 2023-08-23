@@ -146,7 +146,7 @@ int main(int argc, char* argv[]) {
         Buffer<uint16_t> indicesBuf(gltfModel, gltfMesh, "INDICES");
 
         // Get the skeletal buffers
-        Buffer<u8vec4> jointBuf = Buffer<u8vec4>(gltfModel, gltfMesh, skeletal ? "JOINTS_0" : "INDICES");
+        Buffer<u8vec4> boneBuf = Buffer<u8vec4>(gltfModel, gltfMesh, skeletal ? "JOINTS_0" : "INDICES");
         Buffer<vec4> weightBuf = Buffer<vec4>(gltfModel, gltfMesh, skeletal ? "WEIGHTS_0" : "INDICES");
 
         // Write the mesh header
@@ -188,7 +188,7 @@ int main(int argc, char* argv[]) {
             // Write the skeletal data
             if (skeletal) {
                 SkeletalVertex skeletalVertex = StaticVertexToSkeletal(vertex);
-                skeletalVertex.joints = jointBuf[i];
+                skeletalVertex.bones = boneBuf[i];
                 skeletalVertex.weights = weightBuf[i];
                 file.write((const char*)&skeletalVertex, sizeof(SkeletalVertex));
             }
@@ -209,53 +209,44 @@ int main(int argc, char* argv[]) {
         return ExitPrompt(0, shouldPrompt);
     }
 
-    std::cout << "Compiling skeleton joints\n";
-    int numJoints = gltfModel.skins[0].joints.size();
+    std::cout << "Compiling skeleton bones\n";
+    int numBones = gltfModel.skins[0].joints.size();
     gltf::Accessor ibmAccessor = gltfModel.accessors[gltfModel.skins[0].inverseBindMatrices];
     Buffer<mat4> ibmBuffer(gltfModel, ibmAccessor);
-    assert(ibmBuffer.size() == numJoints);
+    assert(ibmBuffer.size() == numBones);
 
-    // Children of joints are stored as nodes, but we need
-    // their actual joint index to bind properly. Since node
-    // and joint indices can be different, a map is necessary
-    // to know which node corresponds to which joint
-    std::map<int, int> nodeIndexToJointIndex;
-    for (int i = 0; i < numJoints; i++)
-        nodeIndexToJointIndex[gltfModel.skins[0].joints[i]] = i; 
+    // Children of bones are stored as nodes, but we need
+    // their actual bone index to bind properly. Since node
+    // and bone indices can be different, a map is necessary
+    // to know which node corresponds to which bone
+    std::map<int, int> nodeIndexToBoneIndex;
+    for (int i = 0; i < numBones; i++)
+        nodeIndexToBoneIndex[gltfModel.skins[0].joints[i]] = i; 
 
-    Skeleton skeleton;
-    for (int j = 0; j < numJoints; j++) {
-        // Get the node corresponding to the joint
+    Bones bones;
+    for (int j = 0; j < numBones; j++) {
+        // Get the node corresponding to the bone
         gltf::Node node = gltfModel.nodes[gltfModel.skins[0].joints[j]];
-        Joint joint; 
-        std::cout << "\tCompiling joint "  << node.name;
+        Bone bone; 
+        std::cout << "\tCompiling bone "  << node.name;
         if (node.children.size() > 0)
             std::cout << " with children:\n";
         else
             std::cout << '\n';
 
-        // Copy the joint transform
-        for (int i = 0; i < node.translation.size(); i++)
-            joint.transform.position[i] = node.translation[i];
-        for (int i = 0; i < node.rotation.size(); i++)
-            joint.transform.rotation[i] = node.rotation[i];
-        for (int i = 0; i < node.scale.size(); i++)
-            joint.transform.scale[i] = node.scale[i];
-
-
         // Copy the inverse bind matrix
-        joint.inverseBindMatrix = ibmBuffer[j];
+        bone.inverseBindMatrix = ibmBuffer[j];
 
-        // Copy the joint's children, this is where the node
-        // to joint conversion occurs
-        assert(node.children.size() <= MAX_JOINT_CHILDREN);
+        // Copy the bone's children, this is where the node
+        // to bone conversion occurs
+        assert(node.children.size() <= MAX_BONE_CHILDREN);
         for (int child : node.children) {
-            joint.children.push_back(nodeIndexToJointIndex[child]);
+            bone.children.push_back(nodeIndexToBoneIndex[child]);
             std::cout << "\t\t" << gltfModel.nodes[child].name << '\n';
         }
-        skeleton.joints.push_back(joint);
+        bones.push_back(bone);
     }
-    file.write((const char*)&skeleton, sizeof(Skeleton));
+    file.write((const char*)&bones, sizeof(Bones));
     std::cout << '\n';
 
     std::cout << "Compiling animations\n";
@@ -272,18 +263,16 @@ int main(int argc, char* argv[]) {
         file.write((const char*)&animHeader, sizeof(AnimationHeader));
         std::cout << "\tCompiling animation " << animHeader.name << " with " << animHeader.numKeyframes << " keyframes\n";
 
-        // Copy the keyframe times and size the transforms to the number of joints
-        for (int i = 0; i < animation.keyframes.size(); i++) { 
-            animation.keyframes[i].time = timeBuffer[i];
-            animation.keyframes[i].transforms.resize(numJoints);
-        }
+        // Size the transforms to the number of bones
+        for (int i = 0; i < animation.keyframes.size(); i++)
+            animation.keyframes[i].transforms.resize(numBones);
 
-        // Create the keyframes for every joint
-        for (int i = 0; i < numJoints; i++) {
+        // Create the keyframes for every bone
+        for (int i = 0; i < numBones; i++) {
             gltf::AnimationChannel posChannel = gltfAnim.channels[i * 3 + 0]; 
             gltf::AnimationSampler posSampler = gltfAnim.samplers[posChannel.sampler];
             Buffer<vec3> posBuffer(gltfModel, gltfModel.accessors[posSampler.output]);
-            int targetJoint = nodeIndexToJointIndex[posChannel.target_node];
+            int targetBone = nodeIndexToBoneIndex[posChannel.target_node];
 
             gltf::AnimationChannel rotChannel = gltfAnim.channels[i * 3 + 1]; 
             gltf::AnimationSampler rotSampler = gltfAnim.samplers[rotChannel.sampler];
@@ -298,7 +287,7 @@ int main(int argc, char* argv[]) {
                 transform.position = posBuffer[k];
                 transform.rotation = rotBuffer[k];
                 transform.scale = scaleBuffer[k];
-                animation.keyframes[k].transforms[targetJoint] = transform;
+                animation.keyframes[k].transforms[targetBone] = transform;
             }
         }
 

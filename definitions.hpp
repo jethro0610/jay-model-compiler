@@ -4,8 +4,8 @@
 #include <vector>
 #include <vector_const.h>
 
-const int MAX_JOINTS = 32;
-const int MAX_JOINT_CHILDREN = 8;
+const int MAX_BONES = 32;
+const int MAX_BONE_CHILDREN = 8;
 const int MAX_ANIM_NAME = 32;
 
 struct Transform {
@@ -55,19 +55,16 @@ struct SkeletalVertex {
     glm::vec3 tangent;
     glm::vec3 bitangent;
     glm::vec2 uv;
-    glm::u8vec4 joints;
+    glm::u8vec4 bones;
     glm::vec4 weights;
 };
 
-struct Joint {
-    Transform transform;
+struct Bone {
     glm::mat4 inverseBindMatrix;
-    vector_const<int, MAX_JOINT_CHILDREN> children;
+    vector_const<int, MAX_BONE_CHILDREN> children;
 };
 
-struct Skeleton {
-    vector_const<Joint, MAX_JOINTS> joints;
-};
+typedef vector_const<Bone, MAX_BONES> Bones;
 
 struct AnimationHeader {
     char name[MAX_ANIM_NAME];
@@ -75,8 +72,7 @@ struct AnimationHeader {
 };
 
 struct Keyframe {
-    float time;
-    vector_const<Transform, MAX_JOINTS> transforms;
+    vector_const<Transform, MAX_BONES> transforms;
 };
 
 struct Animation {
