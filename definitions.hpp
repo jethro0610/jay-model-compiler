@@ -63,8 +63,8 @@ struct Bone {
     glm::mat4 inverseBindMatrix;
     vector_const<int, MAX_BONE_CHILDREN> children;
 };
-
 typedef vector_const<Bone, MAX_BONES> Bones;
+typedef vector_const<Transform, MAX_BONES> Pose;
 
 struct AnimationHeader {
     char name[MAX_ANIM_NAME];
@@ -72,7 +72,7 @@ struct AnimationHeader {
 };
 
 struct Keyframe {
-    vector_const<Transform, MAX_BONES> transforms;
+    Pose pose;
 };
 
 struct Animation {

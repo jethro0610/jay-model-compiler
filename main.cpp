@@ -228,7 +228,7 @@ int main(int argc, char* argv[]) {
         // Get the node corresponding to the bone
         gltf::Node node = gltfModel.nodes[gltfModel.skins[0].joints[j]];
         Bone bone; 
-        std::cout << "\tCompiling bone "  << node.name;
+        std::cout << "\t[" << j << "] "<< " Compiling bone "  << node.name;
         if (node.children.size() > 0)
             std::cout << " with children:\n";
         else
@@ -265,7 +265,7 @@ int main(int argc, char* argv[]) {
 
         // Size the transforms to the number of bones
         for (int i = 0; i < animation.keyframes.size(); i++)
-            animation.keyframes[i].transforms.resize(numBones);
+            animation.keyframes[i].pose.resize(numBones);
 
         // Create the keyframes for every bone
         for (int i = 0; i < numBones; i++) {
@@ -287,7 +287,7 @@ int main(int argc, char* argv[]) {
                 transform.position = posBuffer[k];
                 transform.rotation = rotBuffer[k];
                 transform.scale = scaleBuffer[k];
-                animation.keyframes[k].transforms[targetBone] = transform;
+                animation.keyframes[k].pose[targetBone] = transform;
             }
         }
 
