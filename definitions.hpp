@@ -4,7 +4,8 @@
 #include <vector>
 #include <vector_const.h>
 
-const int MAX_BONES = 32;
+const int MAX_BONES = 64;
+const int MAX_RIBBONS = 4;
 const int MAX_BONE_CHILDREN = 8;
 const int MAX_ANIM_NAME = 32;
 
@@ -65,6 +66,15 @@ struct Bone {
 };
 typedef vector_const<Bone, MAX_BONES> Bones;
 typedef vector_const<Transform, MAX_BONES> Pose;
+
+struct RibbonDesc {
+    int start;
+    int end;
+    float returnSpeed;
+    float tailPower;
+    float tailRatio;
+};
+typedef vector_const<RibbonDesc, MAX_RIBBONS> Ribbons;
 
 struct AnimationHeader {
     char name[MAX_ANIM_NAME];

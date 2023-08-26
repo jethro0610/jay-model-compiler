@@ -224,6 +224,7 @@ int main(int argc, char* argv[]) {
         nodeIndexToBoneIndex[gltfModel.skins[0].joints[i]] = i; 
 
     Bones bones;
+    Ribbons ribbons;
     for (int j = 0; j < numBones; j++) {
         // Get the node corresponding to the bone
         gltf::Node node = gltfModel.nodes[gltfModel.skins[0].joints[j]];
@@ -245,9 +246,21 @@ int main(int argc, char* argv[]) {
             std::cout << "\t\t" << gltfModel.nodes[child].name << '\n';
         }
         bones.push_back(bone);
+
+        // Create a ribbon description if the bone is a ribbon head
+        if (node.extras.Has("ribbon_length")) {
+            RibbonDesc ribbon;
+            ribbon.start = nodeIndexToBoneIndex[gltfModel.skins[0].joints[j]];
+            ribbon.end = ribbon.start + node.extras.Get("ribbon_length").GetNumberAsInt() - 1;
+            ribbon.returnSpeed = node.extras.Get("ribbon_return_speed").GetNumberAsDouble();
+            ribbon.tailPower = node.extras.Get("ribbon_tail_power").GetNumberAsDouble();
+            ribbon.tailRatio = node.extras.Get("ribbon_tail_ratio").GetNumberAsDouble();
+            ribbons.push_back(ribbon);
+        }
     }
     file.write((const char*)&bones, sizeof(Bones));
-    std::cout << '\n';
+    file.write((const char*)&ribbons, sizeof(Ribbons));
+    std::cout << "Skeleton has " << ribbons.size() << " ribbons\n\n";
 
     std::cout << "Compiling animations\n";
     for (gltf::Animation gltfAnim : gltfModel.animations) {
