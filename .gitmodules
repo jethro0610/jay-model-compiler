@@ -1,0 +1,9 @@
+[submodule "Libraries/tinygltf"]
+	path = Libraries/tinygltf
+	url = https://github.com/syoyo/tinygltf.git
+[submodule "Libraries/glm"]
+	path = Libraries/glm
+	url = https://github.com/g-truc/glm.git
+[submodule "Libraries/vector_const"]
+	path = Libraries/vector_const
+	url = https://github.com/jethro0610/vector_const
