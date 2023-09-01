@@ -270,7 +270,7 @@ int main(int argc, char* argv[]) {
         if (gltfAnim.extras.Has("framerate"))
             animation.framerate = gltfAnim.extras.Get("framerate").GetNumberAsInt();
         else
-            animation.framerate = 6;
+            animation.framerate = 0;
         animation.keyframes.resize(timeBuffer.size());
 
         // Write the animation header
