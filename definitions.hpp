@@ -79,6 +79,7 @@ typedef vector_const<RibbonDesc, MAX_RIBBONS> Ribbons;
 struct AnimationHeader {
     char name[MAX_ANIM_NAME];
     int numKeyframes;
+    int framerate;
 };
 
 struct Keyframe {
@@ -87,4 +88,5 @@ struct Keyframe {
 
 struct Animation {
     std::vector<Keyframe> keyframes;
+    int framerate;
 };

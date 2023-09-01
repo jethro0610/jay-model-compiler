@@ -243,7 +243,7 @@ int main(int argc, char* argv[]) {
         assert(node.children.size() <= MAX_BONE_CHILDREN);
         for (int child : node.children) {
             bone.children.push_back(nodeIndexToBoneIndex[child]);
-            std::cout << "\t\t" << gltfModel.nodes[child].name << '\n';
+            std::cout << "\t\t" << "[" << nodeIndexToBoneIndex[child] << "] " << gltfModel.nodes[child].name << '\n';
         }
         bones.push_back(bone);
 
@@ -267,11 +267,16 @@ int main(int argc, char* argv[]) {
         // Get the time and number of keyframes for the animation
         Buffer<float> timeBuffer(gltfModel, gltfModel.accessors[gltfAnim.samplers[0].input]);
         Animation animation;
+        if (gltfAnim.extras.Has("framerate"))
+            animation.framerate = gltfAnim.extras.Get("framerate").GetNumberAsInt();
+        else
+            animation.framerate = 6;
         animation.keyframes.resize(timeBuffer.size());
 
         // Write the animation header
         AnimationHeader animHeader;
         animHeader.numKeyframes = animation.keyframes.size();
+        animHeader.framerate = animation.framerate;
         strncpy(animHeader.name, gltfAnim.name.c_str(), MAX_ANIM_NAME);
         file.write((const char*)&animHeader, sizeof(AnimationHeader));
         std::cout << "\tCompiling animation " << animHeader.name << " with " << animHeader.numKeyframes << " keyframes\n";
