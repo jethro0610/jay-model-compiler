@@ -271,12 +271,18 @@ int main(int argc, char* argv[]) {
             animation.framerate = gltfAnim.extras.Get("framerate").GetNumberAsInt();
         else
             animation.framerate = 0;
+        if (gltfAnim.extras.Has("speed_influence"))
+            animation.speedInfluence= gltfAnim.extras.Get("speed_influence").GetNumberAsDouble();
+        else
+            animation.speedInfluence = 1.0f;
+
         animation.keyframes.resize(timeBuffer.size());
 
         // Write the animation header
         AnimationHeader animHeader;
         animHeader.numKeyframes = animation.keyframes.size();
         animHeader.framerate = animation.framerate;
+        animHeader.speedInfluence = animation.speedInfluence;
         strncpy(animHeader.name, gltfAnim.name.c_str(), MAX_ANIM_NAME);
         file.write((const char*)&animHeader, sizeof(AnimationHeader));
         std::cout << "\tCompiling animation " << animHeader.name << " with " << animHeader.numKeyframes << " keyframes\n";
