@@ -272,7 +272,7 @@ int main(int argc, char* argv[]) {
         else
             animation.framerate = 0;
         if (gltfAnim.extras.Has("speed_influence"))
-            animation.speedInfluence= gltfAnim.extras.Get("speed_influence").GetNumberAsDouble();
+            animation.speedInfluence = gltfAnim.extras.Get("speed_influence").GetNumberAsDouble();
         else
             animation.speedInfluence = 1.0f;
 
