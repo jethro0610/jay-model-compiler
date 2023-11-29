@@ -67,7 +67,7 @@ int main(int argc, char* argv[]) {
 
     // Load the gltf model
     std::string path = argv[1];
-    bool isLoaded = loader.LoadASCIIFromFile(&gltfModel, &err, &warn, path); 
+    bool isLoaded = loader.LoadBinaryFromFile(&gltfModel, &err, &warn, path); 
     if (!isLoaded) {
         std::cout << "Error: " << err << '\n';
         return ExitPrompt(-1, shouldPrompt);
